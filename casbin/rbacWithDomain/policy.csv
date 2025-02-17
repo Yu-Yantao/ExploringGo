@@ -1,0 +1,5 @@
+p, admin, read, data1, tenant1
+p, admin, read, data2, tenant2
+
+g, alice, admin, tenant1
+g, alice, user, tenant2
