@@ -1,0 +1,973 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BSS3.0 升级流程管理系统</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container { max-width: 1400px; margin: 0 auto; }
+        h1 { color: white; text-align: center; margin-bottom: 20px; font-size: 28px; }
+        .tabs { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+        .tab {
+            padding: 12px 24px;
+            background: rgba(255,255,255,0.2);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+        .tab:hover { background: rgba(255,255,255,0.3); }
+        .tab.active { background: white; color: #667eea; }
+        .panel {
+            display: none;
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+        .panel.active { display: block; }
+        .section-title {
+            font-size: 18px;
+            color: #333;
+            margin-bottom: 16px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #667eea;
+        }
+        .form-group { margin-bottom: 16px; }
+        .form-group label { display: block; margin-bottom: 6px; color: #555; font-size: 14px; }
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        .form-group input:focus, .form-group select:focus { outline: none; border-color: #667eea; }
+        .form-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4); }
+        .btn-success { background: #28a745; color: white; }
+        .btn-danger { background: #dc3545; color: white; }
+        .btn-secondary { background: #6c757d; color: white; }
+        .btn-sm { padding: 6px 12px; font-size: 12px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; }
+        th { background: #f8f9fa; font-weight: 600; color: #333; }
+        tr:hover { background: #f8f9fa; }
+        .status-badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 500; }
+        .status-pending { background: #ffeaa7; color: #856404; }
+        .status-running { background: #74b9ff; color: #0056b3; }
+        .status-completed { background: #55efc4; color: #155724; }
+        .status-failed { background: #fab1a0; color: #721c24; }
+        .status-skipped { background: #dfe6e9; color: #6c757d; }
+        
+        /* 流程时间线 */
+        .timeline { display: flex; align-items: center; padding: 20px 0; overflow-x: auto; }
+        .timeline-item { display: flex; flex-direction: column; align-items: center; min-width: 100px; position: relative; }
+        .timeline-item:not(:last-child)::after {
+            content: '';
+            position: absolute;
+            top: 15px;
+            left: 60%;
+            width: calc(100% - 20px);
+            height: 3px;
+            background: #ddd;
+        }
+        .timeline-item.completed:not(:last-child)::after { background: #28a745; }
+        .timeline-item.in_progress:not(:last-child)::after { background: linear-gradient(to right, #28a745 50%, #ddd 50%); }
+        .timeline-dot {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background: #ddd;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            color: white;
+            z-index: 1;
+        }
+        .timeline-item.completed .timeline-dot { background: #28a745; }
+        .timeline-item.in_progress .timeline-dot { background: #007bff; animation: pulse 1.5s infinite; }
+        .timeline-item.skipped .timeline-dot { background: #6c757d; }
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(0, 123, 255, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(0, 123, 255, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(0, 123, 255, 0); }
+        }
+        .timeline-label { margin-top: 8px; font-size: 11px; color: #666; text-align: center; max-width: 80px; }
+        
+        .version-detail { display: none; margin-top: 20px; padding: 20px; background: #f8f9fa; border-radius: 8px; }
+        .version-detail.active { display: block; }
+        .action-buttons { display: flex; gap: 10px; margin-top: 16px; }
+        
+        .log-panel {
+            margin-top: 20px;
+            padding: 16px;
+            background: #1e1e1e;
+            border-radius: 8px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .log-entry { font-family: 'Monaco', 'Consolas', monospace; font-size: 12px; color: #00ff00; margin-bottom: 4px; }
+        .log-entry.error { color: #ff6b6b; }
+        .log-entry.info { color: #74b9ff; }
+        
+        .checkbox-group { display: flex; gap: 20px; }
+        .checkbox-item { display: flex; align-items: center; gap: 6px; }
+        .checkbox-item input[type="checkbox"] { width: 16px; height: 16px; }
+        
+        .item-selector { max-height: 200px; overflow-y: auto; border: 1px solid #ddd; border-radius: 6px; padding: 10px; }
+        .item-checkbox { display: flex; align-items: center; padding: 8px; border-bottom: 1px solid #eee; }
+        .item-checkbox:last-child { border-bottom: none; }
+        .item-checkbox input { margin-right: 10px; }
+        
+        /* 流程配置样式 */
+        .stage-list { border: 1px solid #ddd; border-radius: 8px; padding: 16px; background: #fafafa; }
+        .stage-item {
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            cursor: move;
+        }
+        .stage-item:last-child { margin-bottom: 0; }
+        .stage-item.disabled { opacity: 0.5; background: #f5f5f5; }
+        .stage-item .drag-handle { margin-right: 12px; color: #999; cursor: grab; }
+        .stage-item .stage-info { flex: 1; }
+        .stage-item .stage-name { font-weight: 600; color: #333; }
+        .stage-item .stage-type { font-size: 12px; color: #666; margin-top: 2px; }
+        .stage-item .stage-toggle { margin-left: 12px; }
+        .stage-type-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            margin-left: 8px;
+        }
+        .stage-type-approval { background: #e3f2fd; color: #1976d2; }
+        .stage-type-test { background: #fff3e0; color: #f57c00; }
+        .stage-type-prepare { background: #e8f5e9; color: #388e3c; }
+        
+        .config-card {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 16px;
+            background: white;
+        }
+        .config-card h4 { margin-bottom: 8px; color: #333; }
+        .config-card p { color: #666; font-size: 14px; margin-bottom: 12px; }
+        .config-card .badge-default {
+            background: #667eea;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            margin-left: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>BSS3.0 升级流程管理系统</h1>
+        
+        <div class="tabs">
+            <button class="tab active" onclick="showPanel('items')">条目管理</button>
+            <button class="tab" onclick="showPanel('versions')">版本管理</button>
+            <button class="tab" onclick="showPanel('workflow')">流程操作</button>
+            <button class="tab" onclick="showPanel('config')">流程配置</button>
+        </div>
+        
+        <!-- 条目管理面板 -->
+        <div id="items-panel" class="panel active">
+            <h2 class="section-title">升级条目管理</h2>
+            <div style="margin-bottom: 20px;">
+                <button class="btn btn-primary" onclick="showItemForm()">+ 新增条目</button>
+            </div>
+            
+            <div id="item-form" style="display: none; margin-bottom: 20px; padding: 20px; background: #f8f9fa; border-radius: 8px;">
+                <h3 style="margin-bottom: 16px;">新增升级条目</h3>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>条目名称</label>
+                        <input type="text" id="item-name" placeholder="输入条目名称">
+                    </div>
+                    <div class="form-group">
+                        <label>类型</label>
+                        <select id="item-type">
+                            <option value="需求">需求</option>
+                            <option value="BUG">BUG</option>
+                            <option value="优化">优化</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>关联需求ID</label>
+                        <input type="text" id="item-requirement" placeholder="ITSM工单号">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>开发人员</label>
+                        <input type="text" id="item-developer" placeholder="开发人员姓名">
+                    </div>
+                    <div class="form-group">
+                        <label>测试人员</label>
+                        <input type="text" id="item-tester" placeholder="测试人员姓名">
+                    </div>
+                    <div class="form-group">
+                        <label>条目负责人</label>
+                        <input type="text" id="item-owner" placeholder="条目负责人姓名">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>属性</label>
+                    <div class="checkbox-group">
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="has-script">
+                            <label for="has-script">涉及脚本</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="has-cache">
+                            <label for="has-cache">涉及缓存</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="has-restart">
+                            <label for="has-restart">需要重启</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="action-buttons">
+                    <button class="btn btn-primary" onclick="createItem()">创建条目</button>
+                    <button class="btn btn-secondary" onclick="hideItemForm()">取消</button>
+                </div>
+            </div>
+            
+            <table id="items-table">
+                <thead>
+                    <tr>
+                        <th>条目ID</th>
+                        <th>名称</th>
+                        <th>类型</th>
+                        <th>开发人员</th>
+                        <th>测试人员</th>
+                        <th>状态</th>
+                        <th>BTE结果</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+        
+        <!-- 版本管理面板 -->
+        <div id="versions-panel" class="panel">
+            <h2 class="section-title">升级版本管理</h2>
+            <div style="margin-bottom: 20px;">
+                <button class="btn btn-primary" onclick="showVersionForm()">+ 发布新版本</button>
+            </div>
+            
+            <div id="version-form" style="display: none; margin-bottom: 20px; padding: 20px; background: #f8f9fa; border-radius: 8px;">
+                <h3 style="margin-bottom: 16px;">发布升级版本</h3>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>版本名称</label>
+                        <input type="text" id="version-name" placeholder="如：2024年12月第1次升级">
+                    </div>
+                    <div class="form-group">
+                        <label>版本负责人</label>
+                        <input type="text" id="version-owner" placeholder="版本负责人">
+                    </div>
+                    <div class="form-group">
+                        <label>厂家负责人</label>
+                        <input type="text" id="vendor-owner" placeholder="厂家负责人">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>BTE测试负责人</label>
+                        <input type="text" id="bte-tester" placeholder="BTE测试负责人">
+                    </div>
+                    <div class="form-group">
+                        <label>灰度测试负责人</label>
+                        <input type="text" id="gray-tester" placeholder="灰度测试负责人">
+                    </div>
+                    <div class="form-group">
+                        <label>生产测试负责人</label>
+                        <input type="text" id="prod-tester" placeholder="生产测试负责人">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>选择流程配置</label>
+                    <select id="flow-config-select"></select>
+                </div>
+                <div class="form-group">
+                    <label>选择升级条目</label>
+                    <div class="item-selector" id="item-selector"></div>
+                </div>
+                <div class="action-buttons">
+                    <button class="btn btn-primary" onclick="createVersion()">发布版本</button>
+                    <button class="btn btn-secondary" onclick="hideVersionForm()">取消</button>
+                </div>
+            </div>
+            
+            <table id="versions-table">
+                <thead>
+                    <tr>
+                        <th>版本ID</th>
+                        <th>名称</th>
+                        <th>版本负责人</th>
+                        <th>当前阶段</th>
+                        <th>状态</th>
+                        <th>创建时间</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+        
+        <!-- 流程操作面板 -->
+        <div id="workflow-panel" class="panel">
+            <h2 class="section-title">流程操作</h2>
+            <div class="form-group">
+                <label>选择版本</label>
+                <select id="workflow-version" onchange="loadVersionDetail()">
+                    <option value="">-- 请选择版本 --</option>
+                </select>
+            </div>
+            
+            <div id="version-detail" class="version-detail">
+                <h3 id="detail-title" style="margin-bottom: 16px;"></h3>
+                <div class="timeline" id="timeline"></div>
+                
+                <div id="stage-actions" style="margin-top: 20px;">
+                    <h4 style="margin-bottom: 12px;">当前阶段操作</h4>
+                    <div id="action-content"></div>
+                </div>
+                
+                <div style="margin-top: 20px;">
+                    <h4 style="margin-bottom: 12px;">版本条目</h4>
+                    <table id="version-items-table">
+                        <thead>
+                            <tr>
+                                <th>条目ID</th>
+                                <th>名称</th>
+                                <th>BTE结果</th>
+                                <th>灰度结果</th>
+                                <th>生产结果</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <div class="log-panel" id="log-panel">
+                <div class="log-entry info">[系统] 升级流程管理系统已启动</div>
+            </div>
+        </div>
+        
+        <!-- 流程配置面板 -->
+        <div id="config-panel" class="panel">
+            <h2 class="section-title">流程配置管理</h2>
+            <p style="color: #666; margin-bottom: 20px;">配置升级流程的各个阶段，可以启用/禁用阶段，设置超时时间等。</p>
+            
+            <div style="margin-bottom: 20px;">
+                <button class="btn btn-primary" onclick="showConfigForm()">+ 新建流程配置</button>
+            </div>
+            
+            <div id="config-form" style="display: none; margin-bottom: 20px; padding: 20px; background: #f8f9fa; border-radius: 8px;">
+                <h3 style="margin-bottom: 16px;">新建流程配置</h3>
+                <div class="form-row" style="grid-template-columns: 1fr 2fr;">
+                    <div class="form-group">
+                        <label>配置名称</label>
+                        <input type="text" id="config-name" placeholder="如：紧急升级流程">
+                    </div>
+                    <div class="form-group">
+                        <label>描述</label>
+                        <input type="text" id="config-desc" placeholder="配置描述">
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label>选择流程阶段</label>
+                    <div class="stage-list" id="stage-selector"></div>
+                </div>
+                
+                <div class="action-buttons">
+                    <button class="btn btn-primary" onclick="saveFlowConfig()">保存配置</button>
+                    <button class="btn btn-secondary" onclick="hideConfigForm()">取消</button>
+                </div>
+            </div>
+            
+            <div id="config-list"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8082/api';
+        let currentWorkflowId = '';
+        let currentVersionId = '';
+        let currentStage = '';
+        let allItems = [];
+        let allFlowConfigs = [];
+        let editingConfigId = null;
+
+        // 所有可用的阶段
+        const ALL_STAGES = [
+            {key: 'bte_confirm', name: 'BTE条目确认', type: 'approval', timeout: 72, auto_pass: false},
+            {key: 'bte_finalize', name: 'BTE定版', type: 'approval', timeout: 48, auto_pass: false},
+            {key: 'bte_prepare', name: 'BTE版本准备', type: 'prepare', timeout: 24, auto_pass: false},
+            {key: 'bte_test', name: 'BTE测试', type: 'test', timeout: 96, auto_pass: false},
+            {key: 'gray_confirm', name: '灰度条目确认', type: 'approval', timeout: 48, auto_pass: false},
+            {key: 'gray_finalize', name: '灰度定版', type: 'approval', timeout: 24, auto_pass: false},
+            {key: 'gray_prepare', name: '灰度版本准备', type: 'prepare', timeout: 24, auto_pass: false},
+            {key: 'gray_test', name: '灰度测试', type: 'test', timeout: 96, auto_pass: false},
+            {key: 'prod_finalize', name: '生产定版', type: 'approval', timeout: 48, auto_pass: false},
+            {key: 'prod_prepare', name: '生产版本准备', type: 'prepare', timeout: 24, auto_pass: false},
+            {key: 'prod_test', name: '生产测试', type: 'test', timeout: 96, auto_pass: false},
+            {key: 'close_confirm', name: '关闭确认', type: 'approval', timeout: 72, auto_pass: true},
+            {key: 'end_confirm', name: '结束确认', type: 'approval', timeout: 48, auto_pass: true},
+        ];
+
+        function showPanel(panelName) {
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.panel').forEach(panel => panel.classList.remove('active'));
+            event.target.classList.add('active');
+            document.getElementById(panelName + '-panel').classList.add('active');
+            
+            if (panelName === 'items') loadItems();
+            if (panelName === 'versions') loadVersions();
+            if (panelName === 'workflow') loadVersionsForSelect();
+            if (panelName === 'config') loadFlowConfigs();
+        }
+
+        // ============================================================
+        // 条目管理
+        // ============================================================
+        
+        function showItemForm() { document.getElementById('item-form').style.display = 'block'; }
+        function hideItemForm() { document.getElementById('item-form').style.display = 'none'; }
+
+        async function loadItems() {
+            try {
+                const res = await fetch(`${API_BASE}/items`);
+                const data = await res.json();
+                allItems = data.items || [];
+                
+                const tbody = document.querySelector('#items-table tbody');
+                tbody.innerHTML = allItems.map(item => `
+                    <tr>
+                        <td>${item.id}</td>
+                        <td>${item.name}</td>
+                        <td>${item.type}</td>
+                        <td>${item.developer}</td>
+                        <td>${item.tester}</td>
+                        <td><span class="status-badge status-pending">${item.status}</span></td>
+                        <td>${item.bte_result}</td>
+                    </tr>
+                `).join('');
+            } catch (err) {
+                addLog('加载条目失败: ' + err.message, 'error');
+            }
+        }
+
+        async function createItem() {
+            const item = {
+                name: document.getElementById('item-name').value,
+                type: document.getElementById('item-type').value,
+                requirement_id: document.getElementById('item-requirement').value,
+                developer: document.getElementById('item-developer').value,
+                tester: document.getElementById('item-tester').value,
+                item_owner: document.getElementById('item-owner').value,
+                has_script: document.getElementById('has-script').checked,
+                has_cache: document.getElementById('has-cache').checked,
+                has_restart: document.getElementById('has-restart').checked,
+            };
+            
+            try {
+                const res = await fetch(`${API_BASE}/items`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(item)
+                });
+                const data = await res.json();
+                addLog(`条目创建成功: ${data.id} - ${data.name}`, 'info');
+                hideItemForm();
+                loadItems();
+            } catch (err) {
+                addLog('创建条目失败: ' + err.message, 'error');
+            }
+        }
+
+        // ============================================================
+        // 版本管理
+        // ============================================================
+        
+        function showVersionForm() {
+            document.getElementById('version-form').style.display = 'block';
+            loadItemsForSelector();
+            loadFlowConfigsForSelect();
+        }
+        function hideVersionForm() { document.getElementById('version-form').style.display = 'none'; }
+
+        async function loadItemsForSelector() {
+            await loadItems();
+            const selector = document.getElementById('item-selector');
+            selector.innerHTML = allItems.map(item => `
+                <div class="item-checkbox">
+                    <input type="checkbox" id="select-${item.id}" value="${item.id}">
+                    <label for="select-${item.id}">${item.id} - ${item.name} (${item.status})</label>
+                </div>
+            `).join('');
+        }
+
+        async function loadFlowConfigsForSelect() {
+            try {
+                const res = await fetch(`${API_BASE}/flow-configs`);
+                allFlowConfigs = await res.json();
+                
+                const select = document.getElementById('flow-config-select');
+                select.innerHTML = allFlowConfigs.map(c => 
+                    `<option value="${c.id}" ${c.is_default ? 'selected' : ''}>${c.name}${c.is_default ? ' (默认)' : ''}</option>`
+                ).join('');
+            } catch (err) {
+                addLog('加载流程配置失败: ' + err.message, 'error');
+            }
+        }
+
+        async function loadVersions() {
+            try {
+                const res = await fetch(`${API_BASE}/versions`);
+                const data = await res.json();
+                
+                const tbody = document.querySelector('#versions-table tbody');
+                tbody.innerHTML = (data || []).map(v => `
+                    <tr>
+                        <td>${v.id}</td>
+                        <td>${v.name}</td>
+                        <td>${v.version_owner}</td>
+                        <td>${formatStage(v.current_stage)}</td>
+                        <td><span class="status-badge status-${v.status}">${v.status}</span></td>
+                        <td>${formatDate(v.created_at)}</td>
+                        <td>
+                            <button class="btn btn-primary btn-sm" onclick="viewVersion('${v.id}')">查看</button>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (err) {
+                addLog('加载版本失败: ' + err.message, 'error');
+            }
+        }
+
+        async function createVersion() {
+            const selectedItems = [];
+            document.querySelectorAll('#item-selector input:checked').forEach(cb => selectedItems.push(cb.value));
+            
+            if (selectedItems.length === 0) {
+                alert('请至少选择一个条目');
+                return;
+            }
+            
+            const version = {
+                name: document.getElementById('version-name').value,
+                version_owner: document.getElementById('version-owner').value,
+                vendor_owner: document.getElementById('vendor-owner').value,
+                bte_tester: document.getElementById('bte-tester').value,
+                gray_tester: document.getElementById('gray-tester').value,
+                prod_tester: document.getElementById('prod-tester').value,
+                is_urgent: false,
+                item_ids: selectedItems,
+                flow_config_id: parseInt(document.getElementById('flow-config-select').value)
+            };
+            
+            try {
+                const res = await fetch(`${API_BASE}/versions`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(version)
+                });
+                const data = await res.json();
+                currentWorkflowId = data.workflow_id;
+                currentVersionId = data.version_id;
+                addLog(`版本发布成功: ${data.version_id}, WorkflowID: ${data.workflow_id}`, 'info');
+                hideVersionForm();
+                loadVersions();
+            } catch (err) {
+                addLog('发布版本失败: ' + err.message, 'error');
+            }
+        }
+
+        function viewVersion(versionId) {
+            showPanel('workflow');
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab')[2].classList.add('active');
+            setTimeout(() => {
+                document.getElementById('workflow-version').value = versionId;
+                loadVersionDetail();
+            }, 100);
+        }
+
+        // ============================================================
+        // 流程操作
+        // ============================================================
+
+        async function loadVersionsForSelect() {
+            try {
+                const res = await fetch(`${API_BASE}/versions`);
+                const data = await res.json();
+                const select = document.getElementById('workflow-version');
+                select.innerHTML = '<option value="">-- 请选择版本 --</option>' +
+                    (data || []).map(v => `<option value="${v.id}">${v.id} - ${v.name}</option>`).join('');
+            } catch (err) {
+                addLog('加载版本列表失败: ' + err.message, 'error');
+            }
+        }
+
+        async function loadVersionDetail() {
+            const versionId = document.getElementById('workflow-version').value;
+            if (!versionId) {
+                document.getElementById('version-detail').classList.remove('active');
+                return;
+            }
+            
+            currentVersionId = versionId;
+            currentWorkflowId = `upgrade-${versionId}`;
+            
+            try {
+                const res = await fetch(`${API_BASE}/versions/${versionId}/status`);
+                const data = await res.json();
+                currentStage = data.current_stage;
+                
+                document.getElementById('detail-title').textContent = `${data.version_id} - ${data.version_name || '升级版本'}`;
+                renderTimeline(data.timeline);
+                renderActions(data.current_stage, data.status);
+                renderVersionItems(data.items || []);
+                document.getElementById('version-detail').classList.add('active');
+            } catch (err) {
+                addLog('加载版本详情失败: ' + err.message, 'error');
+            }
+        }
+
+        function renderTimeline(timeline) {
+            const container = document.getElementById('timeline');
+            container.innerHTML = (timeline || []).map((t, i) => `
+                <div class="timeline-item ${t.status}">
+                    <div class="timeline-dot">${i + 1}</div>
+                    <div class="timeline-label">${t.stage}</div>
+                </div>
+            `).join('');
+        }
+
+        function renderActions(stage, status) {
+            const container = document.getElementById('action-content');
+            
+            if (status === 'WORKFLOW_EXECUTION_STATUS_COMPLETED' || stage === 'completed') {
+                container.innerHTML = '<p style="color: #28a745;">流程已完成</p>';
+                return;
+            }
+            
+            const stageName = formatStage(stage);
+            
+            if (stage && stage.includes('test')) {
+                container.innerHTML = `
+                    <p>当前阶段: <strong>${stageName}</strong></p>
+                    <div class="action-buttons">
+                        <button class="btn btn-success" onclick="submitTest(true)">全部测试通过</button>
+                        <button class="btn btn-danger" onclick="submitTest(false)">存在不通过</button>
+                    </div>
+                `;
+            } else {
+                container.innerHTML = `
+                    <p>当前阶段: <strong>${stageName}</strong></p>
+                    <div class="form-group" style="margin-top: 12px;">
+                        <label>操作人</label>
+                        <input type="text" id="operator-name" placeholder="请输入您的姓名">
+                    </div>
+                    <div class="form-group">
+                        <label>备注</label>
+                        <textarea id="approval-comment" rows="2" placeholder="可选备注"></textarea>
+                    </div>
+                    <div class="action-buttons">
+                        <button class="btn btn-success" onclick="submitApproval(true)">确认通过</button>
+                        <button class="btn btn-danger" onclick="submitApproval(false)">驳回</button>
+                    </div>
+                `;
+            }
+        }
+
+        function renderVersionItems(items) {
+            const tbody = document.querySelector('#version-items-table tbody');
+            tbody.innerHTML = items.map(item => `
+                <tr>
+                    <td>${item.id}</td>
+                    <td>${item.name}</td>
+                    <td>${formatResult(item.bte_result)}</td>
+                    <td>${formatResult(item.gray_result)}</td>
+                    <td>${formatResult(item.prod_result)}</td>
+                </tr>
+            `).join('');
+        }
+
+        async function submitApproval(approved) {
+            const operator = document.getElementById('operator-name').value;
+            if (!operator) { alert('请输入操作人姓名'); return; }
+            
+            const data = {
+                workflow_id: currentWorkflowId,
+                action: {
+                    operator: operator,
+                    approved: approved,
+                    comment: document.getElementById('approval-comment').value
+                }
+            };
+            
+            try {
+                const res = await fetch(`${API_BASE}/workflow/${currentStage}/approve`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                
+                if (res.ok) {
+                    addLog(`${formatStage(currentStage)} ${approved ? '已通过' : '已驳回'}, 操作人: ${operator}`, 'info');
+                    setTimeout(loadVersionDetail, 1000);
+                } else {
+                    throw new Error('操作失败');
+                }
+            } catch (err) {
+                addLog('提交审批失败: ' + err.message, 'error');
+            }
+        }
+
+        async function submitTest(allPassed) {
+            const data = { workflow_id: currentWorkflowId, all_passed: allPassed };
+            
+            try {
+                const res = await fetch(`${API_BASE}/workflow/${currentStage}/test`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                
+                if (res.ok) {
+                    addLog(`${formatStage(currentStage)} ${allPassed ? '全部通过' : '存在不通过'}`, 'info');
+                    setTimeout(loadVersionDetail, 1000);
+                } else {
+                    throw new Error('操作失败');
+                }
+            } catch (err) {
+                addLog('提交测试结果失败: ' + err.message, 'error');
+            }
+        }
+
+        // ============================================================
+        // 流程配置
+        // ============================================================
+
+        function showConfigForm(configId = null) {
+            editingConfigId = configId;
+            document.getElementById('config-form').style.display = 'block';
+            
+            // 渲染阶段选择器
+            const selector = document.getElementById('stage-selector');
+            let selectedStages = ALL_STAGES.map(s => ({...s, enabled: true, order: ALL_STAGES.indexOf(s) + 1}));
+            
+            if (configId) {
+                const config = allFlowConfigs.find(c => c.id === configId);
+                if (config) {
+                    document.getElementById('config-name').value = config.name;
+                    document.getElementById('config-desc').value = config.description;
+                    selectedStages = config.stages || selectedStages;
+                }
+            } else {
+                document.getElementById('config-name').value = '';
+                document.getElementById('config-desc').value = '';
+            }
+            
+            selector.innerHTML = ALL_STAGES.map((stage, idx) => {
+                const saved = selectedStages.find(s => s.key === stage.key);
+                const enabled = saved ? saved.enabled : true;
+                return `
+                    <div class="stage-item ${enabled ? '' : 'disabled'}" data-key="${stage.key}">
+                        <span class="drag-handle">☰</span>
+                        <div class="stage-info">
+                            <div class="stage-name">
+                                ${stage.name}
+                                <span class="stage-type-badge stage-type-${stage.type}">${stage.type}</span>
+                            </div>
+                            <div class="stage-type">超时: ${stage.timeout}小时 ${stage.auto_pass ? '(超时自动通过)' : ''}</div>
+                        </div>
+                        <div class="stage-toggle">
+                            <input type="checkbox" id="stage-${stage.key}" ${enabled ? 'checked' : ''} onchange="toggleStage('${stage.key}', this.checked)">
+                            <label for="stage-${stage.key}">启用</label>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function hideConfigForm() {
+            document.getElementById('config-form').style.display = 'none';
+            editingConfigId = null;
+        }
+
+        function toggleStage(key, enabled) {
+            const item = document.querySelector(`.stage-item[data-key="${key}"]`);
+            if (enabled) {
+                item.classList.remove('disabled');
+            } else {
+                item.classList.add('disabled');
+            }
+        }
+
+        async function loadFlowConfigs() {
+            try {
+                const res = await fetch(`${API_BASE}/flow-configs`);
+                allFlowConfigs = await res.json();
+                
+                const container = document.getElementById('config-list');
+                container.innerHTML = allFlowConfigs.map(config => `
+                    <div class="config-card">
+                        <h4>${config.name}${config.is_default ? '<span class="badge-default">默认</span>' : ''}</h4>
+                        <p>${config.description || '无描述'}</p>
+                        <div style="margin-bottom: 12px;">
+                            ${(config.stages || []).filter(s => s.enabled).map(s => 
+                                `<span class="stage-type-badge stage-type-${s.type}" style="margin-right: 4px;">${s.name}</span>`
+                            ).join('')}
+                        </div>
+                        <div>
+                            <button class="btn btn-primary btn-sm" onclick="showConfigForm(${config.id})">编辑</button>
+                            ${!config.is_default ? `<button class="btn btn-danger btn-sm" onclick="deleteFlowConfig(${config.id})">删除</button>` : ''}
+                        </div>
+                    </div>
+                `).join('');
+            } catch (err) {
+                addLog('加载流程配置失败: ' + err.message, 'error');
+            }
+        }
+
+        async function saveFlowConfig() {
+            const name = document.getElementById('config-name').value;
+            if (!name) { alert('请输入配置名称'); return; }
+            
+            const stages = [];
+            document.querySelectorAll('.stage-item').forEach((item, idx) => {
+                const key = item.dataset.key;
+                const template = ALL_STAGES.find(s => s.key === key);
+                const enabled = item.querySelector('input[type="checkbox"]').checked;
+                stages.push({
+                    key: key,
+                    name: template.name,
+                    type: template.type,
+                    enabled: enabled,
+                    timeout: template.timeout,
+                    auto_pass: template.auto_pass,
+                    order: idx + 1
+                });
+            });
+            
+            const data = {
+                name: name,
+                description: document.getElementById('config-desc').value,
+                stages: stages
+            };
+            
+            try {
+                const url = editingConfigId ? `${API_BASE}/flow-configs/${editingConfigId}` : `${API_BASE}/flow-configs`;
+                const method = editingConfigId ? 'PUT' : 'POST';
+                
+                const res = await fetch(url, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                
+                if (res.ok) {
+                    addLog(`流程配置${editingConfigId ? '更新' : '创建'}成功`, 'info');
+                    hideConfigForm();
+                    loadFlowConfigs();
+                } else {
+                    throw new Error('保存失败');
+                }
+            } catch (err) {
+                addLog('保存流程配置失败: ' + err.message, 'error');
+            }
+        }
+
+        async function deleteFlowConfig(id) {
+            if (!confirm('确定要删除此配置吗？')) return;
+            
+            try {
+                const res = await fetch(`${API_BASE}/flow-configs/${id}`, { method: 'DELETE' });
+                if (res.ok) {
+                    addLog('流程配置已删除', 'info');
+                    loadFlowConfigs();
+                } else {
+                    const data = await res.json();
+                    alert(data.error || '删除失败');
+                }
+            } catch (err) {
+                addLog('删除失败: ' + err.message, 'error');
+            }
+        }
+
+        // ============================================================
+        // 工具函数
+        // ============================================================
+
+        function formatStage(stage) {
+            const stageNames = {
+                'bte_confirm': 'BTE条目确认', 'bte_finalize': 'BTE定版', 'bte_prepare': 'BTE版本准备', 'bte_test': 'BTE测试',
+                'gray_confirm': '灰度条目确认', 'gray_finalize': '灰度定版', 'gray_prepare': '灰度版本准备', 'gray_test': '灰度测试',
+                'prod_finalize': '生产定版', 'prod_prepare': '生产版本准备', 'prod_test': '生产测试',
+                'close_confirm': '关闭确认', 'end_confirm': '结束确认', 'completed': '已完成'
+            };
+            return stageNames[stage] || stage;
+        }
+
+        function formatResult(result) {
+            const colors = { '待测试': 'status-pending', '通过': 'status-completed', '不通过': 'status-failed', '跳过': 'status-skipped' };
+            return `<span class="status-badge ${colors[result] || ''}">${result || '待测试'}</span>`;
+        }
+
+        function formatDate(dateStr) {
+            if (!dateStr) return '-';
+            return new Date(dateStr).toLocaleString('zh-CN');
+        }
+
+        function addLog(message, type = 'info') {
+            const panel = document.getElementById('log-panel');
+            const time = new Date().toLocaleTimeString('zh-CN');
+            panel.innerHTML += `<div class="log-entry ${type}">[${time}] ${message}</div>`;
+            panel.scrollTop = panel.scrollHeight;
+        }
+
+        // 初始化
+        loadItems();
+    </script>
+</body>
+</html>
