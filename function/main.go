@@ -1,5 +1,7 @@
 package main
 
+import "fmt"
+
 type Server struct {
 	host string
 	port int
@@ -26,4 +28,8 @@ func NewServer(options ...Option) *Server {
 		option(s)
 	}
 	return s
+}
+func main() {
+	s := NewServer(withHost("192.168.1.1"), withPort(8080))
+	fmt.Println(s)
 }
